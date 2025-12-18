@@ -28,8 +28,8 @@ impl Dynamics for SimpleModel {
         let yaw_rate = control[2];
 
         // 1. Rotate body acceleration into world frame
-        let ax_world = ax_body * yaw.cos() + ay_body * yaw.sin();
-        let ay_world = -ax_body * yaw.sin() + ay_body * yaw.cos();
+        let ax_world = ax_body * yaw.cos() - ay_body * yaw.sin();
+        let ay_world = ax_body * yaw.sin() + ay_body * yaw.cos();
 
         // 2. Apply drag in the direction of world velocity
         let dvx = ax_world - (self.drag * vx);
