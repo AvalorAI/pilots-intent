@@ -8,23 +8,22 @@ use pilots_intent::{
 
 fn main() {
     let input = DroneInput {
-        roll: 20f64.to_radians(),
-        pitch: 0f64.to_radians(),
+        roll_rad: 20f64.to_radians(),
+        pitch_rad: 10f64.to_radians(),
+        yaw_rate_rps: 2.0,
     };
 
     let t_final = 10.0;
     let steps = 30_000;
 
-    // 2. State expanded to 5D: [x, y, vx, vy, yaw]
-    // We assume the drone starts at (0,0) moving with current momentum,
-    // and facing North (yaw = 0.0).
-    let initial_state: State = vec![
-        0.0,  // x
-        0.0,  // y
-        0.0,  // vx (Current momentum West)
-        0.0,  // vy (Current momentum North)
-        3.14, // yaw (Facing direction)
-    ];
+    // NED planar state: North, East, V_North, V_East, Yaw
+    let initial_state = State::new(
+        0.0, // north [m]
+        0.0, // east [m]
+        0.0, // v_north [m/s]
+        0.0, // v_east [m/s]
+        0.0, // yaw [rad] (0 = facing North)
+    );
 
     let model = SimpleQuadcopter { drag: 0.1 };
     let prediction = predict(&input, initial_state, &model, &ForwardEuler, t_final, steps);

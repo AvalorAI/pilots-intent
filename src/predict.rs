@@ -2,17 +2,17 @@ use std::time::{Duration, Instant};
 
 use crate::{
     traits::{Dynamics, Stepper},
-    types::{DroneInput, State},
+    types::DroneInput,
 };
 
 #[derive(Debug, Clone)]
-pub struct Prediction {
-    pub states: Vec<State>,
+pub struct Prediction<S> {
+    pub states: Vec<S>,
     pub t_final: f64,
     cpu_time: Duration,
 }
 
-impl Prediction {
+impl<S> Prediction<S> {
     pub fn n(&self) -> usize {
         self.states.len().saturating_sub(1)
     }
@@ -33,18 +33,21 @@ impl Prediction {
 /// Predict future states assuming constant input over the horizon
 pub fn predict<M, S>(
     input: &DroneInput,
-    initial_state: State,
+    initial_state: M::State,
     model: &M,
     solver: &S,
     t_final: f64,
     n: usize,
-) -> Prediction
+) -> Prediction<M::State>
 where
     M: Dynamics,
-    S: Stepper,
+    S: Stepper<M>,
 {
-    debug_assert!(n > 0, "n must be > 0");
-    debug_assert!(t_final.is_finite() && t_final > 0.0);
+    assert!(n > 0, "n must be > 0");
+    assert!(
+        t_final.is_finite() && t_final > 0.0,
+        "t_final must be finite and > 0"
+    );
 
     let dt = t_final / n as f64;
     let start = Instant::now();

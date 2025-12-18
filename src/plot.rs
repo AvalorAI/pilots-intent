@@ -1,9 +1,9 @@
 use plotters::prelude::*;
 use std::path::Path;
 
-use crate::predict::Prediction;
+use crate::{predict::Prediction, types::State};
 
-pub fn plot_xy<P: AsRef<Path>>(prediction: &Prediction, filename: P) {
+pub fn plot_xy<P: AsRef<Path>>(prediction: &Prediction<State>, filename: P) {
     let states = &prediction.states;
     assert!(states.len() >= 2, "need at least 2 states");
 
@@ -15,8 +15,7 @@ pub fn plot_xy<P: AsRef<Path>>(prediction: &Prediction, filename: P) {
     let mut y_max = f64::NEG_INFINITY;
 
     for s in states {
-        let x = s[0];
-        let y = s[1];
+        let (x, y) = s.xy();
 
         x_min = x_min.min(x);
         x_max = x_max.max(x);
@@ -46,8 +45,8 @@ pub fn plot_xy<P: AsRef<Path>>(prediction: &Prediction, filename: P) {
 
     chart
         .configure_mesh()
-        .x_desc("x [m]")
-        .y_desc("y [m]")
+        .x_desc("North [m]")
+        .y_desc("East [m]")
         .draw()
         .unwrap();
 
