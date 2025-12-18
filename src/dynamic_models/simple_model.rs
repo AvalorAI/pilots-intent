@@ -11,7 +11,7 @@ impl Dynamics for SimpleModel {
     fn input_to_control(&self, input: &DroneInput) -> Control {
         // Body-frame accelerations
         // Pitch > 0 = Forward (X); Roll > 0 = Right (Y)
-        let ax_body = -GRAVITY * input.pitch.tan();
+        let ax_body = GRAVITY * input.pitch.tan();
         let ay_body = GRAVITY * input.roll.tan();
 
         // [ax_body, ay_body, yaw_rate]
