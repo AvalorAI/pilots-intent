@@ -7,66 +7,19 @@ pub struct DroneInput {
     pub yaw_rate_rps: f64, // radians per second, clockwise is positive
 }
 
-/// Model-specific control vector for the simple quadcopter: body-frame accelerations and yaw rate.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Control {
-    pub ax_body_mps2: f64,
-    pub ay_body_mps2: f64,
-    pub yaw_rate_rps: f64,
-}
-
-/// Flattened planar NED state: [North, East, V_North, V_East, Yaw]
-/// Yaw is radians, 0 faces North, positive is clockwise toward East.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct State {
-    pub north_m: f64,
-    pub east_m: f64,
-    pub v_north_mps: f64,
-    pub v_east_mps: f64,
-    pub yaw_rad: f64,
-}
-
-impl State {
-    pub fn new(north_m: f64, east_m: f64, v_north_mps: f64, v_east_mps: f64, yaw_rad: f64) -> Self {
-        Self {
-            north_m,
-            east_m,
-            v_north_mps,
-            v_east_mps,
-            yaw_rad,
-        }
-    }
-
-    pub fn zero() -> Self {
-        Self::new(0.0, 0.0, 0.0, 0.0, 0.0)
-    }
-
-    pub fn xy(&self) -> (f64, f64) {
-        (self.north_m, self.east_m)
-    }
-
-    pub fn ensure_finite(&self) {
-        assert!(self.north_m.is_finite(), "north must be finite");
-        assert!(self.east_m.is_finite(), "east must be finite");
-        assert!(self.v_north_mps.is_finite(), "v_north must be finite");
-        assert!(self.v_east_mps.is_finite(), "v_east must be finite");
-        assert!(self.yaw_rad.is_finite(), "yaw must be finite");
-    }
-}
-
-/// Minimal trait for states that can be integrated with explicit methods.
+/// Minimal trait for states that can be integrated with time-marching methods.
+/// The derivative has the same shape as the state.
 pub trait IntegrableState: Clone {
     fn add_scaled(&self, derivative: &Self, scale: f64) -> Self;
 }
 
-impl IntegrableState for State {
-    fn add_scaled(&self, derivative: &Self, scale: f64) -> Self {
-        Self {
-            north_m: self.north_m + scale * derivative.north_m,
-            east_m: self.east_m + scale * derivative.east_m,
-            v_north_mps: self.v_north_mps + scale * derivative.v_north_mps,
-            v_east_mps: self.v_east_mps + scale * derivative.v_east_mps,
-            yaw_rad: self.yaw_rad + scale * derivative.yaw_rad,
-        }
-    }
+/// Optional helper for anything that can be projected into a 2D plot.
+pub trait Position2D {
+    fn position(&self) -> (f64, f64);
+}
+
+/// States that can be viewed as dense vectors for matrix-based solvers/analysis.
+pub trait StateVector: IntegrableState {
+    fn to_dvector(&self) -> nalgebra::DVector<f64>;
+    fn from_dvector(v: nalgebra::DVector<f64>) -> Self;
 }
