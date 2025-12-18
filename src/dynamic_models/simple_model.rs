@@ -15,7 +15,7 @@ impl Dynamics for SimpleModel {
         let ay_body = -GRAVITY * input.roll.tan();
 
         // [ax_body, ay_body, yaw_rate]
-        vec![ax_body, ay_body, input.yaw_rate]
+        vec![ax_body, ay_body]
     }
 
     fn f(&self, state: &State, control: &Control) -> State {
@@ -25,7 +25,7 @@ impl Dynamics for SimpleModel {
 
         let ax_body = control[0];
         let ay_body = control[1];
-        let yaw_rate = control[2];
+        // let yaw_rate = control[2];
 
         // 1. Rotate body acceleration into world frame
         let ax_world = ax_body * yaw.cos() - ay_body * yaw.sin();
@@ -36,11 +36,11 @@ impl Dynamics for SimpleModel {
         let dvy = ay_world - (self.drag * vy);
 
         vec![
-            vx,       // x_dot
-            vy,       // y_dot
-            dvx,      // vx_dot
-            dvy,      // vy_dot
-            yaw_rate, // yaw_dot
+            vx,  // x_dot
+            vy,  // y_dot
+            dvx, // vx_dot
+            dvy, // vy_dot
+            0.0, // yaw_rate, // yaw_dot
         ]
     }
 }

@@ -9,9 +9,9 @@ use pilots_intent::{
 fn main() {
     // 1. Pilot input now includes yaw_rate to handle constant turns
     let input = DroneInput {
-        pitch: 20f64.to_radians(), // Realistic forward tilt
-        roll: 0f64.to_radians(),   // No lateral tilt
-        yaw_rate: -0.0,            // Constant slow turn (radians/sec)
+        pitch: 0f64.to_radians(), // Realistic forward tilt
+        roll: 20f64.to_radians(), // No lateral tilt
+                                  // yaw_rate: -0.0,            // Constant slow turn (radians/sec)
     };
 
     let t_final = 10.0;
@@ -25,7 +25,7 @@ fn main() {
         0.0, // y
         0.0, // vx (Current momentum West)
         0.0, // vy (Current momentum North)
-        0.0, // yaw (Facing direction)
+        0.5, // yaw (Facing direction)
     ];
 
     // 3. Simple planar dynamics model
