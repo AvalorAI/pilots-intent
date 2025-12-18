@@ -107,7 +107,7 @@ impl Dynamics for SimpleQuadcopter {
         // Body frame: x-forward, y-right, z-down
         SimpleQuadControl {
             ax_body_mps2: GRAVITY * pitch.tan(),
-            ay_body_mps2: GRAVITY * roll.tan(),
+            ay_body_mps2: -GRAVITY * roll.tan(),
             yaw_rate_rps: input.yaw_rate_rps,
         }
     }
