@@ -25,7 +25,7 @@ fn main() {
         0.0, // y
         0.0, // vx (Current momentum West)
         0.0, // vy (Current momentum North)
-        0.5, // yaw (Facing direction)
+        0.0, // yaw (Facing direction)
     ];
 
     // 3. Simple planar dynamics model
