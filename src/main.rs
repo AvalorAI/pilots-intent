@@ -1,17 +1,15 @@
 use pilots_intent::{
-    dynamic_models::simple_model::SimpleModel,
+    dynamic_models::SimpleQuadcopter,
     plot::plot_xy,
     predict::predict,
-    solver::ForwardEuler,
+    solvers::ForwardEuler,
     types::{DroneInput, State},
 };
 
 fn main() {
-    // 1. Pilot input now includes yaw_rate to handle constant turns
     let input = DroneInput {
-        roll: 20f64.to_radians(), // Realistic forward tilt
-        pitch: 0f64.to_radians(), // No lateral tilt
-                                  // yaw_rate: -0.0,            // Constant slow turn (radians/sec)
+        roll: 20f64.to_radians(),
+        pitch: 0f64.to_radians(),
     };
 
     let t_final = 10.0;
@@ -28,18 +26,10 @@ fn main() {
         3.14, // yaw (Facing direction)
     ];
 
-    // 3. Simple planar dynamics model
-    // Added a small drag value to prevent the drone from reaching
-    // impossible speeds over a 10s horizon.
-    let model = SimpleModel { drag: 0.1 };
+    let model = SimpleQuadcopter { drag: 0.1 };
+    let prediction = predict(&input, initial_state, &model, &ForwardEuler, t_final, steps);
 
-    let solver = ForwardEuler;
+    println!("Computation time: {:?}", prediction.cpu_time());
 
-    // The prediction logic remains the same, but 'state' inside is now 5D
-    let prediction = predict(&input, initial_state, &model, &solver, t_final, steps);
-
-    println!("Computation time: {:?}", prediction.cpu_time);
-
-    // This will now plot the 2D path resulting from the 5D integration
     plot_xy(&prediction, "plot_output.png")
 }

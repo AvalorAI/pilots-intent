@@ -7,9 +7,9 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct Prediction {
-    pub states: Vec<State>, // x(0), x(dt), ..., x(t_final)
+    pub states: Vec<State>,
     pub t_final: f64,
-    pub cpu_time: Duration,
+    cpu_time: Duration,
 }
 
 impl Prediction {
@@ -23,6 +23,10 @@ impl Prediction {
         } else {
             self.t_final / self.n() as f64
         }
+    }
+
+    pub fn cpu_time(&self) -> Duration {
+        self.cpu_time
     }
 }
 
@@ -39,13 +43,12 @@ where
     M: Dynamics,
     S: Stepper,
 {
-    assert!(n > 0, "n must be > 0");
-    assert!(t_final.is_finite() && t_final > 0.0);
+    debug_assert!(n > 0, "n must be > 0");
+    debug_assert!(t_final.is_finite() && t_final > 0.0);
 
     let dt = t_final / n as f64;
     let start = Instant::now();
 
-    // Input → control (held constant)
     let control = model.input_to_control(input);
 
     let mut states = Vec::with_capacity(n + 1);

@@ -3,11 +3,11 @@ use crate::{
     types::{Control, DroneInput, State},
 };
 
-pub struct SimpleModel {
+pub struct SimpleQuadcopter {
     pub drag: f64,
 }
 
-impl Dynamics for SimpleModel {
+impl Dynamics for SimpleQuadcopter {
     fn input_to_control(&self, input: &DroneInput) -> Control {
         // Body-frame accelerations
         // Pitch > 0 = Forward (X); Roll > 0 = Right (Y)

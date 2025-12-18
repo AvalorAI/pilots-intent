@@ -1,5 +1,4 @@
 #[derive(Debug)]
-
 pub struct DroneInput {
     pub roll: f64, // radians
     pub pitch: f64, // radians
