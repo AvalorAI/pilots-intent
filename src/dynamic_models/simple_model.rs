@@ -26,7 +26,7 @@ impl Dynamics for SimpleModel {
         let ax_body = control[0];
         let ay_body = control[1];
 
-        let theta = -yaw;
+        let theta = -(yaw + std::f64::consts::FRAC_PI_2);
 
         // Rotate body acceleration into NED world frame
         let ax_world = ax_body * theta.cos() - ay_body * theta.sin();
