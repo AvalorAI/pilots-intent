@@ -6,7 +6,7 @@ pub struct DroneInput {
     pub yaw_rate: f64, // radians/sec (held constant)
 }
 
-/// Flattened state vector: [x, y, vx, vy]
+/// Flattened state vector: [x, y, vx, vy, yaw]
 pub type State = Vec<f64>;
 
 /// Model-specific control vector
