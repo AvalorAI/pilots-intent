@@ -1,8 +1,8 @@
 use pilots_intent::{
     dynamic_models::SimpleQuadcopter,
     plot::plot_xy,
-    predict::predict_constant,
-    solvers::ForwardEuler,
+    predict::{predict_constant, predict_constant_multistep},
+    solvers::{Ab2, Ab4, ForwardEuler, Heun, Midpoint, Rk4},
     traits::Dynamics,
     types::{DroneInput, State},
 };
@@ -27,20 +27,31 @@ fn main() {
     );
 
     let model = SimpleQuadcopter { drag: 0.0 };
-    let stepper = ForwardEuler;
     let control = model.input_to_control(&input);
 
-    let prediction = predict_constant(
-        &model,
-        &stepper,
-        initial_state,
-        control,
-        0.0,
-        t_final,
-        steps,
-    );
+    // --- Single-step methods ---
 
-    println!("Computation time: {:?}", prediction.cpu_time());
+    let p = predict_constant(&model, &ForwardEuler, initial_state, control, 0.0, t_final, steps);
+    println!("{:20} — {:.3?}", "Forward Euler", p.cpu_time());
 
-    plot_xy(&prediction, "plot_output.png")
+    let p = predict_constant(&model, &Heun, initial_state, control, 0.0, t_final, steps);
+    println!("{:20} — {:.3?}", "Heun (RK2)", p.cpu_time());
+
+    let p = predict_constant(&model, &Midpoint, initial_state, control, 0.0, t_final, steps);
+    println!("{:20} — {:.3?}", "Midpoint (RK2)", p.cpu_time());
+
+    let p = predict_constant(&model, &Rk4, initial_state, control, 0.0, t_final, steps);
+    println!("{:20} — {:.3?}", "RK4", p.cpu_time());
+
+    // --- Multi-step methods (bootstrapped with RK4) ---
+
+    let p = predict_constant_multistep(&model, &Rk4, &Ab2, initial_state, control, 0.0, t_final, steps);
+    println!("{:20} — {:.3?}", "AB2 (multi-step)", p.cpu_time());
+
+    let p = predict_constant_multistep(&model, &Rk4, &Ab4, initial_state, control, 0.0, t_final, steps);
+    println!("{:20} — {:.3?}", "AB4 (multi-step)", p.cpu_time());
+
+    // Plot RK4 as reference
+    let p = predict_constant(&model, &Rk4, initial_state, control, 0.0, t_final, steps);
+    plot_xy(&p, "plot_output.png");
 }

@@ -21,6 +21,9 @@ target
 #.idea/
 
 
+# Beads issue tracker (local only)
+.beads/
+
 # Added by cargo
 
 /target

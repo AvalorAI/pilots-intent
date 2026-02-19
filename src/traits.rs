@@ -40,6 +40,28 @@ pub trait Stepper<const N: usize, const M: usize, Model: Dynamics<N, M>> {
     ) -> StepResult<N>;
 }
 
+/// Multi-step time-marching integrator that uses previous derivative evaluations.
+///
+/// Multi-step methods (e.g. Adams-Bashforth) achieve higher order by reusing
+/// function evaluations from previous steps, rather than sub-stepping within
+/// one interval like Runge-Kutta methods.
+pub trait MultiStepper<const N: usize, const M: usize, Model: Dynamics<N, M>> {
+    /// Number of previous derivative evaluations required (e.g. 2 for AB2, 4 for AB4).
+    fn history_len(&self) -> usize;
+
+    /// Advance one step given the current state and a ring of previous f-evaluations.
+    ///
+    /// `f_history` has exactly `history_len()` entries ordered oldest-first.
+    fn step(
+        &self,
+        model: &Model,
+        state: &State<N>,
+        f_history: &[State<N>],
+        control: &Control<M>,
+        dt: f64,
+    ) -> StepResult<N>;
+}
+
 /// Feedback controller producing control vectors from state.
 pub trait Controller<const N: usize, const M: usize> {
     fn control(&self, t: f64, state: &State<N>) -> Control<M>;
