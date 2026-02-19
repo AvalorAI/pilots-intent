@@ -1,168 +1,80 @@
 use crate::{
-    traits::{Dynamics, GRAVITY, LinearizableDynamics},
-    types::{DroneInput, IntegrableState, Position2D, StateVector},
+    traits::{Dynamics, LinearizableDynamics, GRAVITY},
+    types::{Control, DroneInput, State},
 };
 
 /// Planar NED quadcopter model using hover small-angle thrust and linear drag.
-/// Body frame: x-forward, y-right, z-down. Yaw = 0 faces North, positive clockwise.
+///
+/// State indices: `[north_m, east_m, v_north_mps, v_east_mps, yaw_rad]`
+/// Control indices: `[ax_body_mps2, ay_body_mps2, yaw_rate_rps]`
 pub struct SimpleQuadcopter {
     pub drag: f64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SimpleQuadState {
-    pub north_m: f64,
-    pub east_m: f64,
-    pub v_north_mps: f64,
-    pub v_east_mps: f64,
-    pub yaw_rad: f64,
-}
+impl Dynamics<5, 3> for SimpleQuadcopter {
+    type Input = DroneInput;
 
-impl SimpleQuadState {
-    pub fn new(north_m: f64, east_m: f64, v_north_mps: f64, v_east_mps: f64, yaw_rad: f64) -> Self {
-        Self {
-            north_m,
-            east_m,
-            v_north_mps,
-            v_east_mps,
-            yaw_rad,
-        }
-    }
-
-    pub fn zero() -> Self {
-        Self::new(0.0, 0.0, 0.0, 0.0, 0.0)
-    }
-
-    pub fn ensure_finite(&self) {
-        assert!(self.north_m.is_finite(), "north must be finite");
-        assert!(self.east_m.is_finite(), "east must be finite");
-        assert!(self.v_north_mps.is_finite(), "v_north must be finite");
-        assert!(self.v_east_mps.is_finite(), "v_east must be finite");
-        assert!(self.yaw_rad.is_finite(), "yaw must be finite");
-    }
-}
-
-impl IntegrableState for SimpleQuadState {
-    fn add_scaled(&self, derivative: &Self, scale: f64) -> Self {
-        Self {
-            north_m: self.north_m + scale * derivative.north_m,
-            east_m: self.east_m + scale * derivative.east_m,
-            v_north_mps: self.v_north_mps + scale * derivative.v_north_mps,
-            v_east_mps: self.v_east_mps + scale * derivative.v_east_mps,
-            yaw_rad: self.yaw_rad + scale * derivative.yaw_rad,
-        }
-    }
-}
-
-impl Position2D for SimpleQuadState {
-    fn position(&self) -> (f64, f64) {
-        (self.north_m, self.east_m)
-    }
-}
-
-impl StateVector for SimpleQuadState {
-    fn to_dvector(&self) -> nalgebra::DVector<f64> {
-        nalgebra::DVector::from_vec(vec![
-            self.north_m,
-            self.east_m,
-            self.v_north_mps,
-            self.v_east_mps,
-            self.yaw_rad,
-        ])
-    }
-
-    fn from_dvector(v: nalgebra::DVector<f64>) -> Self {
-        assert!(
-            v.len() == 5,
-            "SimpleQuadState expects 5 elements (north, east, v_north, v_east, yaw)"
-        );
-        Self {
-            north_m: v[0],
-            east_m: v[1],
-            v_north_mps: v[2],
-            v_east_mps: v[3],
-            yaw_rad: v[4],
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SimpleQuadControl {
-    pub ax_body_mps2: f64,
-    pub ay_body_mps2: f64,
-    pub yaw_rate_rps: f64,
-}
-
-impl Dynamics for SimpleQuadcopter {
-    type State = SimpleQuadState;
-    type Control = SimpleQuadControl;
-
-    fn input_to_control(&self, input: &DroneInput) -> Self::Control {
-        // Limit tilt to avoid tan() blowing up near ±90°
+    fn input_to_control(&self, input: &Self::Input) -> Control<3> {
         const MAX_TILT_RAD: f64 = std::f64::consts::FRAC_PI_2 * 0.95;
         let pitch = input.pitch_rad.clamp(-MAX_TILT_RAD, MAX_TILT_RAD);
         let roll = input.roll_rad.clamp(-MAX_TILT_RAD, MAX_TILT_RAD);
 
-        // Small-angle hover approximation: a_forward ≈ g * tan(pitch)
-        // Body frame: x-forward, y-right, z-down
-        SimpleQuadControl {
-            ax_body_mps2: -GRAVITY * pitch.tan(),
-            ay_body_mps2: GRAVITY * roll.tan(),
-            yaw_rate_rps: input.yaw_rate_rps,
-        }
+        Control::<3>::new(
+            GRAVITY * pitch.tan(),
+            GRAVITY * roll.tan(),
+            input.yaw_rate_rps,
+        )
     }
 
-    fn derivative(&self, _t: f64, state: &Self::State, control: &Self::Control) -> Self::State {
-        state.ensure_finite();
+    fn f(&self, state: &State<5>, control: &Control<3>) -> State<5> {
+        let v_north = state[2];
+        let v_east = state[3];
+        let yaw = state[4];
 
-        let c = state.yaw_rad.cos();
-        let s = state.yaw_rad.sin();
+        let ax_body = control[0];
+        let ay_body = control[1];
+        let yaw_rate = control[2];
+
+        let (s, c) = yaw.sin_cos();
 
         // Rotate body accelerations into NED (x = North, y = East)
-        let ax_n = control.ax_body_mps2 * c - control.ay_body_mps2 * s;
-        let ay_e = control.ax_body_mps2 * s + control.ay_body_mps2 * c;
+        let ax_n = ax_body * c - ay_body * s;
+        let ay_e = ax_body * s + ay_body * c;
 
-        // Linear drag in N/E directions
-        let dv_n = ax_n - self.drag * state.v_north_mps;
-        let dv_e = ay_e - self.drag * state.v_east_mps;
-
-        SimpleQuadState {
-            north_m: state.v_north_mps,    // north_dot
-            east_m: state.v_east_mps,      // east_dot
-            v_north_mps: dv_n,             // v_north_dot
-            v_east_mps: dv_e,              // v_east_dot
-            yaw_rad: control.yaw_rate_rps, // yaw_dot
-        }
-    }
-
-    fn validate_state(&self, state: &Self::State) {
-        state.ensure_finite();
+        State::<5>::new(
+            v_north,                    // north_dot
+            v_east,                     // east_dot
+            ax_n - self.drag * v_north, // v_north_dot
+            ay_e - self.drag * v_east,  // v_east_dot
+            yaw_rate,                   // yaw_dot
+        )
     }
 }
 
-impl LinearizableDynamics for SimpleQuadcopter {
+impl LinearizableDynamics<5, 3> for SimpleQuadcopter {
     fn jacobian(
         &self,
-        _t: f64,
-        state: &Self::State,
-        control: &Self::Control,
+        state: &State<5>,
+        control: &Control<3>,
     ) -> nalgebra::DMatrix<f64> {
-        let c = state.yaw_rad.cos();
-        let s = state.yaw_rad.sin();
+        let yaw = state[4];
+        let ax_body = control[0];
+        let ay_body = control[1];
 
-        // Partials of rotated accelerations w.r.t yaw
-        let dax_dyaw = -control.ax_body_mps2 * s - control.ay_body_mps2 * c;
-        let day_dyaw = control.ax_body_mps2 * c - control.ay_body_mps2 * s;
+        let (s, c) = yaw.sin_cos();
+
+        let dax_dyaw = -ax_body * s - ay_body * c;
+        let day_dyaw = ax_body * c - ay_body * s;
 
         nalgebra::DMatrix::from_row_slice(
             5,
             5,
             &[
-                0.0, 0.0, 1.0, 0.0, 0.0, // d(north_dot)/d(state)
-                0.0, 0.0, 0.0, 1.0, 0.0, // d(east_dot)/d(state)
-                0.0, 0.0, -self.drag, 0.0, dax_dyaw, // d(v_n_dot)/d(yaw)
-                0.0, 0.0, 0.0, -self.drag, day_dyaw, // d(v_e_dot)/d(yaw)
-                0.0, 0.0, 0.0, 0.0, 0.0, // d(yaw_dot)/d(state)
+                0.0, 0.0, 1.0, 0.0, 0.0,          // d(north_dot)/d(state)
+                0.0, 0.0, 0.0, 1.0, 0.0,          // d(east_dot)/d(state)
+                0.0, 0.0, -self.drag, 0.0, dax_dyaw, // d(v_n_dot)/d(state)
+                0.0, 0.0, 0.0, -self.drag, day_dyaw, // d(v_e_dot)/d(state)
+                0.0, 0.0, 0.0, 0.0, 0.0,          // d(yaw_dot)/d(state)
             ],
         )
     }
@@ -176,6 +88,10 @@ mod tests {
         SimpleQuadcopter { drag: 0.1 }
     }
 
+    fn zero_state() -> State<5> {
+        State::<5>::zeros()
+    }
+
     #[test]
     fn pitch_forward_pushes_north_when_yaw_zero() {
         let input = DroneInput {
@@ -185,11 +101,10 @@ mod tests {
         };
 
         let control = model().input_to_control(&input);
-        let state = SimpleQuadState::zero();
-        let dx = model().derivative(0.0, &state, &control);
+        let dx = model().f(&zero_state(), &control);
 
-        assert!(dx.v_north_mps > 0.0);
-        assert!(dx.v_east_mps.abs() < 1e-9);
+        assert!(dx[2] > 0.0, "v_north should increase");
+        assert!(dx[3].abs() < 1e-9, "v_east should be ~0");
     }
 
     #[test]
@@ -201,11 +116,10 @@ mod tests {
         };
 
         let control = model().input_to_control(&input);
-        let state = SimpleQuadState::zero();
-        let dx = model().derivative(0.0, &state, &control);
+        let dx = model().f(&zero_state(), &control);
 
-        assert!(dx.v_east_mps > 0.0);
-        assert!(dx.v_north_mps.abs() < 1e-9);
+        assert!(dx[3] > 0.0, "v_east should increase");
+        assert!(dx[2].abs() < 1e-9, "v_north should be ~0");
     }
 
     #[test]
@@ -217,12 +131,12 @@ mod tests {
         };
         let control = model().input_to_control(&input);
 
-        // 90 deg yaw should rotate forward accel into East
-        let state = SimpleQuadState::new(0.0, 0.0, 0.0, 0.0, std::f64::consts::FRAC_PI_2);
-        let dx = model().derivative(0.0, &state, &control);
+        // 90 deg yaw: forward accel should become East
+        let state = State::<5>::new(0.0, 0.0, 0.0, 0.0, std::f64::consts::FRAC_PI_2);
+        let dx = model().f(&state, &control);
 
-        assert!(dx.v_east_mps > 0.0);
-        assert!(dx.v_north_mps.abs() < 1e-9);
+        assert!(dx[3] > 0.0, "v_east should increase");
+        assert!(dx[2].abs() < 1e-9, "v_north should be ~0");
     }
 
     #[test]
@@ -233,9 +147,8 @@ mod tests {
             yaw_rate_rps: 1.0,
         };
         let control = model().input_to_control(&input);
-        let state = SimpleQuadState::zero();
-        let dx = model().derivative(0.0, &state, &control);
+        let dx = model().f(&zero_state(), &control);
 
-        assert_eq!(dx.yaw_rad, 1.0);
+        assert_eq!(dx[4], 1.0);
     }
 }

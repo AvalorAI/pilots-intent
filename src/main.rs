@@ -1,9 +1,10 @@
 use pilots_intent::{
-    dynamic_models::{SimpleQuadState, SimpleQuadcopter},
+    dynamic_models::SimpleQuadcopter,
     plot::plot_xy,
-    predict::predict,
+    predict::predict_constant,
     solvers::ForwardEuler,
-    types::DroneInput,
+    traits::Dynamics,
+    types::{DroneInput, State},
 };
 
 fn main() {
@@ -17,7 +18,7 @@ fn main() {
     let steps = 30_000;
 
     // NED planar state: North, East, V_North, V_East, Yaw
-    let initial_state = SimpleQuadState::new(
+    let initial_state = State::<5>::new(
         0.0,  // north [m]
         0.0,  // east [m]
         5.0,  // v_north [m/s]
@@ -26,12 +27,14 @@ fn main() {
     );
 
     let model = SimpleQuadcopter { drag: 0.0 };
-    let mut solver = ForwardEuler::default();
-    let prediction = predict(
-        &input,
-        initial_state,
+    let stepper = ForwardEuler;
+    let control = model.input_to_control(&input);
+
+    let prediction = predict_constant(
         &model,
-        &mut solver,
+        &stepper,
+        initial_state,
+        control,
         0.0,
         t_final,
         steps,

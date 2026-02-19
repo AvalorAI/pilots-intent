@@ -1,20 +1,20 @@
 use std::time::{Duration, Instant};
 
 use crate::{
-    traits::{Dynamics, Stepper},
-    types::DroneInput,
+    traits::{Dynamics, StepResult, Stepper},
+    types::{Control, State},
 };
 
 #[derive(Debug, Clone)]
-pub struct Prediction<S, U> {
-    pub states: Vec<S>,
-    pub control: U,
+pub struct Prediction<const N: usize, const M: usize> {
+    pub states: Vec<State<N>>,
+    pub control: Control<M>,
     pub t0: f64,
     pub t_final: f64,
     cpu_time: Duration,
 }
 
-impl<S, U> Prediction<S, U> {
+impl<const N: usize, const M: usize> Prediction<N, M> {
     pub fn n(&self) -> usize {
         self.states.len().saturating_sub(1)
     }
@@ -40,19 +40,19 @@ impl<S, U> Prediction<S, U> {
     }
 }
 
-/// Predict future states assuming constant input over the horizon
-pub fn predict<M, S>(
-    input: &DroneInput,
-    initial_state: M::State,
-    model: &M,
-    solver: &mut S,
+/// Predict future states assuming constant control over the horizon.
+pub fn predict_constant<const N: usize, const M: usize, Model, Sol>(
+    model: &Model,
+    stepper: &Sol,
+    initial_state: State<N>,
+    control: Control<M>,
     t0: f64,
     t_final: f64,
     steps: usize,
-) -> Prediction<M::State, M::Control>
+) -> Prediction<N, M>
 where
-    M: Dynamics,
-    S: Stepper<M>,
+    Model: Dynamics<N, M>,
+    Sol: Stepper<N, M, Model>,
 {
     assert!(steps > 0, "steps must be > 0");
     assert!(
@@ -63,18 +63,17 @@ where
     let dt = t_final / steps as f64;
     let start = Instant::now();
 
-    let control = model.input_to_control(input);
-
     let mut states = Vec::with_capacity(steps + 1);
     let mut state = initial_state;
 
-    states.push(state.clone());
+    states.push(state);
 
-    for i in 0..steps {
-        let t = t0 + i as f64 * dt;
-        model.validate_state(&state);
-        state = solver.step(model, t, &state, &control, dt);
-        states.push(state.clone());
+    for _ in 0..steps {
+        let StepResult {
+            state: next, ..
+        } = stepper.step(model, &state, &control, dt);
+        state = next;
+        states.push(state);
     }
 
     Prediction {

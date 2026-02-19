@@ -1,3 +1,3 @@
 pub mod simple_quadcopter_model;
 
-pub use simple_quadcopter_model::{SimpleQuadControl, SimpleQuadState, SimpleQuadcopter};
+pub use simple_quadcopter_model::SimpleQuadcopter;

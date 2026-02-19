@@ -1,8 +1,8 @@
 use nalgebra::{DMatrix, DVector};
 
 use crate::{
-    traits::{LinearizableDynamics, Stepper},
-    types::StateVector,
+    traits::{LinearizableDynamics, StepResult, Stepper},
+    types::{Control, State},
 };
 
 use super::newton::{NewtonOpts, newton};
@@ -21,46 +21,45 @@ impl Default for BackwardEuler {
     }
 }
 
-impl<M> Stepper<M> for BackwardEuler
+impl<const N: usize, const M: usize, Model> Stepper<N, M, Model> for BackwardEuler
 where
-    M: LinearizableDynamics,
-    M::State: StateVector,
+    Model: LinearizableDynamics<N, M>,
 {
     fn step(
-        &mut self,
-        model: &M,
-        t: f64,
-        state: &M::State,
-        control: &M::Control,
+        &self,
+        model: &Model,
+        state: &State<N>,
+        control: &Control<M>,
         dt: f64,
-    ) -> M::State {
+    ) -> StepResult<N> {
         assert!(dt.is_finite() && dt > 0.0, "dt must be finite and > 0");
 
-        let u_prev = state.to_dvector();
-        let m = u_prev.len();
-        assert!(m > 0, "state dimension must be > 0");
+        let u_prev = DVector::from_column_slice(state.as_slice());
 
-        // F(x) = x - u_i - dt * f(t+dt, x)
+        // F(x) = x - u_i - dt * f(x)
         let f_newton = |x: &DVector<f64>| -> DVector<f64> {
-            let x_state = M::State::from_dvector(x.clone());
-            let fx = model.derivative(t + dt, &x_state, control);
-            let fx_vec = fx.to_dvector();
+            let x_state = State::<N>::from_column_slice(x.as_slice());
+            let fx = model.f(&x_state, control);
+            let fx_vec = DVector::from_column_slice(fx.as_slice());
             x - &u_prev - fx_vec * dt
         };
 
         // J(x) = I - dt * df/dx
         let j_newton = |x: &DVector<f64>| -> DMatrix<f64> {
-            let x_state = M::State::from_dvector(x.clone());
-            let j = model.jacobian(t + dt, &x_state, control);
+            let x_state = State::<N>::from_column_slice(x.as_slice());
+            let j = model.jacobian(&x_state, control);
             assert!(
-                j.nrows() == m && j.ncols() == m,
+                j.nrows() == N && j.ncols() == N,
                 "jacobian must be square with dimension matching the state"
             );
-            DMatrix::<f64>::identity(m, m) - j * dt
+            DMatrix::<f64>::identity(N, N) - j * dt
         };
 
         let (x_next, _) = newton(f_newton, j_newton, u_prev.clone(), self.newton_opts);
-        M::State::from_dvector(x_next)
+        StepResult {
+            state: State::<N>::from_column_slice(x_next.as_slice()),
+            error_estimate: None,
+        }
     }
 }
 

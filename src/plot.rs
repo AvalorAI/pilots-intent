@@ -6,18 +6,16 @@ use num_complex::Complex;
 use crate::{
     predict::Prediction,
     traits::LinearizableDynamics,
-    types::{Position2D, StateVector},
 };
 
-pub fn plot_xy<S, U, P>(prediction: &Prediction<S, U>, filename: P)
+/// Plot XY trajectory from state indices [0] (North) and [1] (East).
+pub fn plot_xy<const N: usize, const M: usize, P>(prediction: &Prediction<N, M>, filename: P)
 where
-    S: Position2D,
     P: AsRef<Path>,
 {
     let states = &prediction.states;
     assert!(states.len() >= 2, "need at least 2 states");
 
-    // Extract (x, y)
     let mut points = Vec::with_capacity(states.len());
     let mut x_min = f64::INFINITY;
     let mut x_max = f64::NEG_INFINITY;
@@ -25,7 +23,7 @@ where
     let mut y_max = f64::NEG_INFINITY;
 
     for s in states {
-        let (x, y) = s.position();
+        let (x, y) = (s[0], s[1]);
 
         x_min = x_min.min(x);
         x_max = x_max.max(x);
@@ -35,7 +33,6 @@ where
         points.push((x, y));
     }
 
-    // Padding so line is not glued to border
     let pad_x = ((x_max - x_min).abs() * 0.1).max(1e-3);
     let pad_y = ((y_max - y_min).abs() * 0.1).max(1e-3);
 
@@ -60,17 +57,14 @@ where
         .draw()
         .unwrap();
 
-    // Trajectory
     chart
         .draw_series(LineSeries::new(points.clone(), &BLUE))
         .unwrap();
 
-    // Start point
     chart
         .draw_series(std::iter::once(Circle::new(points[0], 4, GREEN.filled())))
         .unwrap();
 
-    // End point
     chart
         .draw_series(std::iter::once(Circle::new(
             *points.last().unwrap(),
@@ -82,32 +76,29 @@ where
     root.present().unwrap();
 }
 
-/// Plot a scalar component (by index) of a StateVector over time.
-pub fn plot_component<S, U, P>(
-    prediction: &Prediction<S, U>,
+/// Plot a scalar state component (by index) over time.
+pub fn plot_component<const N: usize, const M: usize, P>(
+    prediction: &Prediction<N, M>,
     component: usize,
     y_desc: &str,
     filename: P,
     to_display: impl Fn(f64) -> f64,
 ) where
-    S: StateVector,
     P: AsRef<Path>,
 {
     assert!(!prediction.states.is_empty(), "states must not be empty");
+    assert!(
+        component < N,
+        "component {component} out of bounds for state of dim {N}"
+    );
 
     let mut series = Vec::with_capacity(prediction.states.len());
     let mut y_min = f64::INFINITY;
     let mut y_max = f64::NEG_INFINITY;
 
     for (i, s) in prediction.states.iter().enumerate() {
-        let v = s.to_dvector();
-        assert!(
-            component < v.len(),
-            "component {component} out of bounds for state of dim {}",
-            v.len()
-        );
         let t = prediction.t_at(i);
-        let y = to_display(v[component]);
+        let y = to_display(s[component]);
         y_min = y_min.min(y);
         y_max = y_max.max(y);
         series.push((t, y));
@@ -211,19 +202,16 @@ pub fn plot_stability_region<P: AsRef<Path>, R>(
 }
 
 /// Plot eigenvalues of df/dx · dt along the trajectory for linearizable models.
-pub fn plot_eigvals<M, P>(
-    prediction: &Prediction<M::State, M::Control>,
-    model: &M,
+pub fn plot_eigvals<const N: usize, const M: usize, Model, P>(
+    prediction: &Prediction<N, M>,
+    model: &Model,
     filename: P,
 ) -> Vec<Vec<Complex<f64>>>
 where
-    M: LinearizableDynamics,
-    M::State: StateVector,
+    Model: LinearizableDynamics<N, M>,
     P: AsRef<Path>,
 {
     assert!(!prediction.states.is_empty(), "states must not be empty");
-    let m = prediction.states[0].to_dvector().len();
-    assert!(m > 0, "state dimension must be > 0");
 
     let dt = prediction.dt();
     let mut eigs: Vec<Vec<Complex<f64>>> = Vec::with_capacity(prediction.states.len());
@@ -233,17 +221,16 @@ where
     let mut y_min = f64::INFINITY;
     let mut y_max = f64::NEG_INFINITY;
 
-    for (i, state) in prediction.states.iter().enumerate() {
-        let t = prediction.t_at(i);
-        let j = model.jacobian(t, state, &prediction.control);
+    for state in &prediction.states {
+        let j = model.jacobian(state, &prediction.control);
         assert!(
-            j.nrows() == m && j.ncols() == m,
+            j.nrows() == N && j.ncols() == N,
             "jacobian must be square with dimension matching the state"
         );
 
         let lam = j.complex_eigenvalues();
-        let mut row = Vec::with_capacity(m);
-        for k in 0..m {
+        let mut row = Vec::with_capacity(N);
+        for k in 0..N {
             let z = lam[k] * dt;
             x_min = x_min.min(z.re);
             x_max = x_max.max(z.re);

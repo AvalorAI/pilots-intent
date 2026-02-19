@@ -1,7 +1,5 @@
-use crate::{
-    traits::{Dynamics, Stepper},
-    types::IntegrableState,
-};
+use crate::traits::{Dynamics, StepResult, Stepper};
+use crate::types::{Control, State};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ForwardEuler;
@@ -12,19 +10,21 @@ impl ForwardEuler {
     }
 }
 
-impl<M: Dynamics> Stepper<M> for ForwardEuler {
+impl<const N: usize, const M: usize, Model: Dynamics<N, M>> Stepper<N, M, Model> for ForwardEuler {
     fn step(
-        &mut self,
-        model: &M,
-        t: f64,
-        state: &M::State,
-        control: &M::Control,
+        &self,
+        model: &Model,
+        state: &State<N>,
+        control: &Control<M>,
         dt: f64,
-    ) -> M::State {
-        assert!(dt.is_finite(), "dt must be finite");
-        assert!(dt > 0.0, "dt must be > 0");
+    ) -> StepResult<N> {
+        debug_assert!(dt.is_finite(), "dt must be finite");
+        debug_assert!(dt > 0.0, "dt must be > 0");
 
-        let dx = model.derivative(t, state, control);
-        state.add_scaled(&dx, dt)
+        let dx = model.f(state, control);
+        StepResult {
+            state: *state + dx * dt,
+            error_estimate: None,
+        }
     }
 }
